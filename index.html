@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAY SYSTEM v13.0</title>
+    <title>TAY CYBER CORE v14.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap" rel="stylesheet">
     <style>
         :root { --main: #00d2ff; --bg: #0f172a; }
@@ -11,14 +11,14 @@
         body.cyber { --main: #00ff41; background: #050505; }
         .container { display:flex; flex-direction:column; height:100vh; padding:10px; box-sizing:border-box; }
         #chat { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
-        .msg { padding:12px; border-radius:15px; max-width:85%; font-size:0.9rem; line-height:1.6; }
+        .msg { padding:12px; border-radius:15px; max-width:85%; font-size:0.9rem; line-height:1.6; border: 1px solid rgba(255,255,255,0.1); }
         .user { background: rgba(255,255,255,0.1); align-self: flex-start; }
-        .bot { background: linear-gradient(45deg, var(--main), transparent); align-self: flex-end; border-right:4px solid var(--main); white-space: pre-wrap; }
+        .bot { background: linear-gradient(45deg, var(--main), transparent); align-self: flex-end; border-right:4px solid var(--main); white-space: pre-wrap; color: #fff; }
         .input-box { background:rgba(0,0,0,0.9); padding:10px; border-radius:15px; border:1px solid var(--main); display:flex; flex-direction:column; gap:8px; }
         input, select, button { padding:10px; border-radius:8px; border:none; font-family:'Cairo'; background:#1e293b; color:white; }
         button { background:var(--main); color:black; font-weight:900; cursor:pointer; }
         #cyber-tools { display: none; flex-direction: column; gap: 5px; }
-        a { color: #fff; text-decoration: underline; font-weight: bold; }
+        .file-labels { font-size: 0.7rem; color: var(--main); margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -28,14 +28,17 @@
     <div class="input-box">
         <select id="mode" onchange="upd(this.value)">
             <option value="s">🎓 وضع الطالب</option>
-            <option value="c">🛡️ وضع الأمن السيبراني</option>
+            <option value="c">🛡️ وضع الخبير السيبراني</option>
         </select>
         <div id="cyber-tools">
-            <input type="password" id="key" placeholder="أدخل كود الوصول الآمن...">
+            <input type="password" id="key" placeholder="أدخل كود الوصول...">
+            <label class="file-labels">🖼️ رفع صورة للتحليل:</label>
             <input type="file" id="pic" accept="image/*">
+            <label class="file-labels">📄 رفع ملف كود/نصي:</label>
+            <input type="file" id="doc" accept=".py,.js,.html,.css,.php,.txt,.c,.cpp">
         </div>
         <div style="display:flex; gap:5px;">
-            <input type="text" id="q" placeholder="اكتب سؤالك هنا..." style="flex:1;">
+            <input type="text" id="q" placeholder="اسأل الخبير..." style="flex:1;">
             <button id="sendBtn" onclick="send()">إرسال</button>
         </div>
     </div>
@@ -46,72 +49,64 @@
 
     window.onload = () => {
         const saved = getKey();
-        if(saved) {
-            document.getElementById('key').value = saved;
-            document.getElementById('key').placeholder = "✅ النظام نشط";
-        }
+        if(saved) document.getElementById('key').value = saved;
     };
 
     function upd(v){
         const isC = (v==='c');
         document.body.className = isC ? 'cyber' : '';
-        document.getElementById('st').innerText = isC ? '🛡️ TAY EXPERT' : '🎓 TAY STUDENT';
+        document.getElementById('st').innerText = isC ? '🛡️ TAY CYBER EXPERT' : '🎓 TAY STUDENT';
         document.getElementById('cyber-tools').style.display = isC ? 'flex' : 'none';
     }
 
     async function send(){
         const q = document.getElementById('q').value;
         const mode = document.getElementById('mode').value;
-        const keyInput = document.getElementById('key').value;
-        const key = keyInput || getKey();
-        const file = document.getElementById('pic').files[0];
+        const key = document.getElementById('key').value || getKey();
+        const picFile = document.getElementById('pic').files[0];
+        const docFile = document.getElementById('doc').files[0];
         
         if(!q) return;
-        if(mode === 'c' && !key) {
-            addMsg("⚠️ للتفعيل والحصول على الكود، تواصل مع المالك عبر التليجرام: @torto77", "bot");
-            return;
-        }
+        if(mode === 'c' && !key) return alert("يتطلب كود وصول!");
 
         addMsg(q, 'user');
-        document.getElementById('q').value = '';
+        document.getElementById('q').value = 'جاري التحليل...';
 
         let imgBase64 = null;
-        if(mode === 'c' && file) {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            await new Promise(r => reader.onload = r);
-            imgBase64 = reader.result.split(',')[1];
+        let fileContent = null;
+
+        if(mode === 'c') {
+            if(picFile) {
+                const r = new FileReader(); r.readAsDataURL(picFile);
+                await new Promise(res => r.onload = res);
+                imgBase64 = r.result.split(',')[1];
+            }
+            if(docFile) {
+                const r = new FileReader(); r.readAsText(docFile);
+                await new Promise(res => r.onload = res);
+                fileContent = r.result;
+            }
         }
 
         try {
             const res = await fetch('/ask', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({q:q, key:key, level:(mode==='c'?'cyber':'student'), image:imgBase64})
+                body: JSON.stringify({q:q, key:key, level:(mode==='c'?'cyber':'student'), image:imgBase64, file_content:fileContent})
             });
             const d = await res.json();
+            if(d.status === "SUCCESS" && mode === 'c') saveKey(key);
             
-            if(d.status === "SUCCESS" && mode === 'c') {
-                saveKey(key);
-                document.getElementById('key').placeholder = "✅ النظام نشط";
-            }
-            
-            // إذا رد السيرفر بأن المفتاح خاطئ
-            if(d.response.includes("مفتاح غير صالح")) {
-                addMsg("❌ الكود غير صحيح. للتواصل إتصل ب @torto77 في التليجرام.", "bot");
-            } else {
-                addMsg(d.response, 'bot');
-            }
-            
+            document.getElementById('q').value = '';
+            addMsg(d.response, 'bot');
         } catch (e) {
-            addMsg("⚠️ فشل الإرسال. للتواصل إتصل ب @torto77 في التليجرام.", "bot");
+            addMsg("⚠️ فشل الإرسال. تواصل مع @torto77 للتفعيل.", "bot");
         }
     }
 
     function addMsg(t,s){
-        const dv=document.createElement('div'); dv.className='msg '+s; 
-        // تحويل المعرف لرابط قابل للنقر
-        dv.innerHTML = t.replace('@torto77', '<a href="https://t.me/torto77" target="_blank">@torto77</a>');
+        const dv=document.createElement('div'); dv.className='msg '+s;
+        dv.innerHTML = t.replace('@torto77', '<a href="https://t.me/torto77" style="color:#00ff41">@torto77</a>');
         document.getElementById('chat').appendChild(dv);
         document.getElementById('chat').scrollTop = 99999;
     }
