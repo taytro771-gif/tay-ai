@@ -6,8 +6,10 @@ app = Flask(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 def check_key_smart(key):
-    # خوارزمية تاي السرية
-    return key and key.startswith("TAY-") and "771" in key
+    # الخوارزمية: يجب أن يبدأ بـ TAY ويحتوي على 771
+    if key and key.startswith("TAY-") and "771" in key:
+        return True
+    return False
 
 @app.route('/')
 def index():
@@ -26,23 +28,17 @@ def ask():
         if level == 'cyber':
             if not check_key_smart(user_key):
                 return jsonify({'response': '❌ الكود غير صحيح. للتواصل إتصل ب @torto77 في التليجرام.'})
-            
-            # موديل الخبير السيبراني
             model_name = "llama-3.2-11b-vision-preview"
-            system_msg = """You are a Senior Cyber Security Expert. 
-            Your task is to analyze code, files, and images for vulnerabilities, malware, or bugs. 
-            Provide step-by-step explanations, write secure code, and act as a professional mentor. 
-            Always prioritize technical accuracy and deep analysis."""
+            system_msg = "You are a Senior Cyber Security Expert. Analyze files and images deeply."
         else:
             model_name = "llama-3.3-70b-versatile"
-            system_msg = "You are a helpful educational assistant for students."
+            system_msg = "You are a helpful student assistant."
 
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         
-        # دمج النص مع محتوى الملف المرفوع
         full_query = query
         if file_content:
-            full_query = f"FILE CONTENT TO ANALYZE:\n{file_content}\n\nUSER QUESTION: {query}"
+            full_query = f"FILE CONTENT:\n{file_content}\n\nUSER QUESTION: {query}"
 
         content = [{"type": "text", "text": full_query}]
         if image_data and level == 'cyber':
@@ -50,8 +46,7 @@ def ask():
 
         payload = {
             "model": model_name,
-            "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": content}],
-            "temperature": 0.2 # تقليل الحرارة لزيادة الدقة التقنية
+            "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": content}]
         }
 
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
@@ -60,10 +55,13 @@ def ask():
         if 'choices' in res:
             return jsonify({'response': res['choices'][0]['message']['content'], 'status': 'SUCCESS'})
         
-        return jsonify({'response': '⚠️ حدث خطأ في معالجة البيانات، حاول مرة أخرى.'})
+        # إذا فشل موديل الرؤية، جرب الموديل النصي كخيار احتياطي فوراً
+        payload["model"] = "llama-3.3-70b-versatile"
+        r2 = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
+        return jsonify({'response': r2.json()['choices'][0]['message']['content'], 'status': 'SUCCESS'})
 
     except Exception as e:
-        return jsonify({'response': f'⚠️ عطل فني: {str(e)}'})
+        return jsonify({'response': f'⚠️ خطأ في النظام: {str(e)}'})
 
 if __name__ == '__main__':
     app.run(debug=True)
