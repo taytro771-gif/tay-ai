@@ -24,28 +24,29 @@ def index():
 def ask():
     try:
         data = request.json
-        user_key = data.get('key')
-        query = data.get('q')
-        level = data.get('level')
-        image_data = data.get('image')
+        user_key = data.get('key', '')
+        query = data.get('q', '')
+        level = data.get('level', 'student')
+        image_data = data.get('image', None)
 
-        # إعدادات الموديل بناءً على الوضع
+        # الموديلات الجديدة المدعومة في 2026
         if level == 'cyber':
             if not user_key or not user_key.startswith("TAY-"):
                 return jsonify({'response': '⚠️ وضع الخبير يتطلب مفتاح TAY-.'})
             if is_key_used(user_key):
                 return jsonify({'response': '❌ هذا المفتاح مستخدم مسبقاً!'})
             
-            model_name = "llama-3.2-11b-vision-preview"
-            system_msg = "You are a Cyber Security Expert. Analyze everything. Write codes. Step-by-step."
+            # الموديل الخبير الذي يدعم الرؤية والتحليل
+            model_name = "llama-3.2-11b-vision-preview" 
+            system_msg = "You are a highly intelligent Cyber Security Expert. Analyze images/files. Write code. Step-by-step."
             mark_key_used(user_key)
         else:
-            model_name = "llama3-8b-8192"
-            system_msg = "You are a helpful educational assistant for students."
+            # الموديل التعليمي السريع والجديد للطالب
+            model_name = "llama-3.3-70b-versatile" 
+            system_msg = "You are a helpful educational assistant for students. Explain clearly."
 
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         
-        # بناء المحتوى
         user_content = [{"type": "text", "text": query}]
         if image_data and level == 'cyber':
             user_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}})
@@ -55,22 +56,19 @@ def ask():
             "messages": [
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_content}
-            ],
-            "max_tokens": 1024
+            ]
         }
         
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
         res_json = r.json()
 
-        # التحقق من وجود الرد لتجنب خطأ 'choices'
         if 'choices' in res_json:
             return jsonify({'response': res_json['choices'][0]['message']['content']})
         else:
-            error_msg = res_json.get('error', {}).get('message', 'خطأ غير معروف في السيرفر')
-            return jsonify({'response': f'❌ تنبيه من السيرفر: {error_msg}'})
+            return jsonify({'response': f'❌ خطأ من المزود: {res_json.get("error", {}).get("message", "Unknown Error")}'})
 
     except Exception as e:
-        return jsonify({'response': f'⚠️ خطأ تقني: {str(e)}'})
+        return jsonify({'response': f'⚠️ عطل فني: {str(e)}'})
 
 if __name__ == '__main__':
     app.run(debug=True)
