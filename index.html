@@ -3,57 +3,72 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAY SYSTEM FIX</title>
+    <title>TAY CYBER CORE</title>
     <style>
-        body { margin:0; background:#050505; color:#00ff41; font-family:monospace; }
-        #chat { height:70vh; overflow-y:auto; padding:15px; border-bottom:1px solid #222; }
-        .msg { margin:10px 0; padding:10px; border-radius:5px; border-left:3px solid #00ff41; background:rgba(0,255,65,0.05); white-space:pre-wrap; }
-        .user { border-left-color:#00d2ff; color:#00d2ff; }
-        .controls { padding:15px; display:flex; flex-direction:column; gap:5px; }
-        input, select, button { background:#111; color:#00ff41; border:1px solid #333; padding:10px; border-radius:5px; }
-        button { background:#00ff41; color:#000; font-weight:bold; cursor:pointer; }
+        :root { --main: #00ff41; --bg: #050505; }
+        body { margin:0; background:var(--bg); color:white; font-family: 'Courier New', monospace; transition: 0.3s; }
+        #chat { height:70vh; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:10px; border-bottom:1px solid #222; }
+        .msg { padding:15px; border-radius:10px; max-width:85%; line-height:1.6; border: 1px solid #111; }
+        .user { background:#111; border-left:4px solid #00d2ff; align-self:flex-start; color:#00d2ff; }
+        .bot { background:rgba(0,255,65,0.05); border-right:4px solid var(--main); align-self:flex-end; color:var(--main); white-space: pre-wrap; }
+        .controls { padding:20px; background:#000; position:fixed; bottom:0; width:100%; box-sizing:border-box; border-top:1px solid #222; }
+        input, select, button { width:100%; padding:12px; margin-bottom:8px; border-radius:5px; border:1px solid #333; background:#0a0a0a; color:var(--main); }
+        button { background:var(--main); color:#000; font-weight:bold; cursor:pointer; border:none; }
+        button:hover { opacity: 0.8; }
+        #loading { display:none; color:orange; text-align:center; font-size:12px; }
     </style>
 </head>
 <body>
     <div id="chat"></div>
+    <div id="loading">📡 جاري المعالجة...</div>
     <div class="controls">
-        <select id="m" onchange="document.getElementById('c-box').style.display=(this.value==='c'?'flex':'none')">
-            <option value="s">🎓 وضع الطالب</option>
-            <option value="c">🛡️ وضع الخبير (771)</option>
+        <select id="m" onchange="document.getElementById('c-area').style.display=(this.value==='cyber'?'block':'none')">
+            <option value="student">🎓 وضع الطالب</option>
+            <option value="cyber">🛡️ وضع الخبير السيبراني</option>
         </select>
-        <div id="c-box" style="display:none; flex-direction:column; gap:5px;">
-            <input type="password" id="k" placeholder="كود 771">
-            <input type="file" id="p" accept="image/*">
+        <div id="c-area" style="display:none;">
+            <input type="password" id="k" placeholder="أدخل كود الوصول (771)">
+            <input type="file" id="pic" accept="image/*">
+            <input type="file" id="doc" accept=".py,.js,.php,.txt">
         </div>
         <div style="display:flex; gap:5px;">
             <input type="text" id="q" placeholder="اسأل تاي..." style="flex:1;">
-            <button onclick="send()">إرسال</button>
+            <button onclick="send()" style="width:80px;">إرسال</button>
         </div>
     </div>
 <script>
     async function send(){
         const q=document.getElementById('q').value, m=document.getElementById('m').value, k=document.getElementById('k').value;
-        const p=document.getElementById('p').files[0];
+        const picF=document.getElementById('pic').files[0], docF=document.getElementById('doc').files[0];
         if(!q) return;
+        
+        document.getElementById('loading').style.display='block';
         addMsg(q,'user'); document.getElementById('q').value='';
 
-        let img = null;
-        if(m==='c' && p){
-            const reader = new FileReader(); reader.readAsDataURL(p);
-            await new Promise(r=>reader.onload=r);
-            img = reader.result.split(',')[1];
+        let img=null, txt=null;
+        if(m==='cyber'){
+            if(picF){ 
+                const r=new FileReader(); r.readAsDataURL(picF);
+                await new Promise(res=>r.onload=res); img=r.result.split(',')[1];
+            }
+            if(docF){
+                const r=new FileReader(); r.readAsText(docF);
+                await new Promise(res=>r.onload=res); txt=r.result;
+            }
         }
 
         try {
             const res = await fetch('/ask', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({q:q, key:k, level:(m==='c'?'cyber':'student'), image:img})
+                body: JSON.stringify({q:q, key:k, level:m, image:img, file_content:txt})
             });
             const data = await res.json();
             addMsg(data.response, 'bot');
         } catch(e) {
-            addMsg("⚠️ فشل الاتصال. جرب إرسال نص فقط بدون صورة للتأكد.", 'bot');
+            addMsg("⚠️ فشل في الاتصال. تأكد من تحديث الموقع والـ API Key.", 'bot');
+        } finally {
+            document.getElementById('loading').style.display='none';
         }
     }
     function addMsg(t,s){

@@ -3,7 +3,12 @@ import requests
 import os
 
 app = Flask(__name__)
+# جلب المفتاح الجديد من إعدادات Vercel
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+def verify_key(k):
+    # نظام تاي: أي كود يحتوي على 771
+    return "771" in str(k)
 
 @app.route('/')
 def index():
@@ -12,34 +17,47 @@ def index():
 @app.route('/ask', methods=['POST'])
 def ask():
     try:
-        # استقبال البيانات سواء كانت JSON أو Form
-        q = request.form.get('q') or request.json.get('q')
-        key = request.form.get('key') or request.json.get('key', '')
-        level = request.form.get('level') or request.json.get('level', 'student')
-        image_data = request.form.get('image') or request.json.get('image')
-        file_text = request.form.get('file_content') or request.json.get('file_content', '')
+        data = request.get_json()
+        q = data.get('q', '')
+        key = data.get('key', '')
+        mode = data.get('level', 'student')
+        img_b64 = data.get('image', None)
+        file_txt = data.get('file_content', '')
 
-        if level == 'cyber' and "771" not in str(key):
-            return jsonify({'response': '❌ الكود غير صحيح.'})
+        # التحقق من وضع الخبير
+        if mode == 'cyber' and not verify_key(key):
+            return jsonify({'response': '⚠️ كود الوصول غير صحيح (يجب أن يحتوي على 771).'})
 
-        model = "llama-3.2-11b-vision-preview" if (image_data or level == 'cyber') else "llama-3.3-70b-versatile"
+        # اختيار الموديل (الخبير للصور والملفات، والطالب للنصوص)
+        model = "llama-3.2-11b-vision-preview" if (img_b64 or mode == 'cyber') else "llama-3.3-70b-versatile"
         
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
-        full_q = f"FILE:\n{file_text}\n\nQ: {q}" if file_text else q
-        content = [{"type": "text", "text": full_q}]
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         
-        if image_data and level == 'cyber':
-            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}})
+        # دمج البيانات
+        full_query = f"CONTEXT FILE:\n{file_txt}\n\nUSER QUESTION: {q}" if file_txt else q
+        content = [{"type": "text", "text": full_query}]
+        
+        if img_b64 and mode == 'cyber':
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
 
         payload = {
             "model": model,
-            "messages": [{"role": "system", "content": "Cyber Expert Mode."}, {"role": "user", "content": content}]
+            "messages": [
+                {"role": "system", "content": "You are a Senior Cyber Security Expert. Analyze images and code deeply and step-by-step."},
+                {"role": "user", "content": content}
+            ],
+            "temperature": 0.2
         }
 
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
-        return jsonify({'response': r.json()['choices'][0]['message']['content']})
+        res = r.json()
+        
+        if 'choices' in res:
+            return jsonify({'response': res['choices'][0]['message']['content']})
+        return jsonify({'response': '⚠️ خطأ من سيرفر Groq. تأكد من المفتاح الجديد.'})
+        
     except Exception as e:
-        return jsonify({'response': f'⚠️ خطأ سيرفر: {str(e)}'})
+        return jsonify({'response': f'⚠️ عطل فني: {str(e)}'})
 
 if __name__ == '__main__':
     app.run()
