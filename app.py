@@ -3,12 +3,8 @@ import requests
 import os
 
 app = Flask(__name__)
-# جلب المفتاح الجديد من إعدادات Vercel
+# التأكد من جلب المفتاح
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-
-def verify_key(k):
-    # نظام تاي: أي كود يحتوي على 771
-    return "771" in str(k)
 
 @app.route('/')
 def index():
@@ -16,48 +12,36 @@ def index():
 
 @app.route('/ask', methods=['POST'])
 def ask():
+    if not GROQ_API_KEY:
+        return jsonify({'response': '❌ خطأ: لم يتم العثور على GROQ_API_KEY في إعدادات Vercel.'})
+    
     try:
         data = request.get_json()
         q = data.get('q', '')
         key = data.get('key', '')
         mode = data.get('level', 'student')
-        img_b64 = data.get('image', None)
-        file_txt = data.get('file_content', '')
-
-        # التحقق من وضع الخبير
-        if mode == 'cyber' and not verify_key(key):
-            return jsonify({'response': '⚠️ كود الوصول غير صحيح (يجب أن يحتوي على 771).'})
-
-        # اختيار الموديل (الخبير للصور والملفات، والطالب للنصوص)
-        model = "llama-3.2-11b-vision-preview" if (img_b64 or mode == 'cyber') else "llama-3.3-70b-versatile"
+        
+        # تفعيل الخبير بوجود 771
+        is_cyber = (mode == 'cyber' and "771" in str(key))
+        model = "llama-3.3-70b-versatile" 
         
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        
-        # دمج البيانات
-        full_query = f"CONTEXT FILE:\n{file_txt}\n\nUSER QUESTION: {q}" if file_txt else q
-        content = [{"type": "text", "text": full_query}]
-        
-        if img_b64 and mode == 'cyber':
-            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}})
-
         payload = {
             "model": model,
-            "messages": [
-                {"role": "system", "content": "You are a Senior Cyber Security Expert. Analyze images and code deeply and step-by-step."},
-                {"role": "user", "content": content}
-            ],
-            "temperature": 0.2
+            "messages": [{"role": "user", "content": q}]
         }
 
-        r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
-        res = r.json()
+        r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=20)
         
-        if 'choices' in res:
-            return jsonify({'response': res['choices'][0]['message']['content']})
-        return jsonify({'response': '⚠️ خطأ من سيرفر Groq. تأكد من المفتاح الجديد.'})
+        # فحص استجابة Groq الحقيقية
+        if r.status_code != 200:
+            return jsonify({'response': f'⚠️ خطأ من Groq (كود {r.status_code}): {r.text}'})
+            
+        res = r.json()
+        return jsonify({'response': res['choices'][0]['message']['content']})
         
     except Exception as e:
-        return jsonify({'response': f'⚠️ عطل فني: {str(e)}'})
+        return jsonify({'response': f'⚠️ خطأ داخلي في السيرفر: {str(e)}'})
 
 if __name__ == '__main__':
     app.run()
