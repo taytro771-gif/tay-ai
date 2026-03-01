@@ -5,29 +5,16 @@ import os
 app = Flask(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 VALID_KEYS_FILE = "valid_keys.txt"
-USED_KEYS_FILE = "used_keys.txt"
 
 def check_key(key):
-    if not os.path.exists(VALID_KEYS_FILE): return False
+    if not os.path.exists(VALID_KEYS_FILE): return "INVALID"
+    # البحث السريع في المليون مفتاح دون كتابة
     with open(VALID_KEYS_FILE, "r") as f:
-        valid_keys = f.read().splitlines()
-    
-    if os.path.exists(USED_KEYS_FILE):
-        with open(USED_KEYS_FILE, "r") as f:
-            used_keys = f.read().splitlines()
-    else:
-        used_keys = []
-
-    if key in valid_keys and key not in used_keys:
-        return "VALID"
-    elif key in used_keys:
-        return "USED"
-    else:
-        return "INVALID"
-
-def mark_key_used(key):
-    with open(USED_KEYS_FILE, "a") as f:
-        f.write(key + "\n")
+        # قراءة الملف كمجموعة (Set) لسرعة خرافية في البحث
+        valid_keys = set(line.strip() for line in f)
+        if key in valid_keys:
+            return "VALID"
+    return "INVALID"
 
 @app.route('/')
 def index():
@@ -45,13 +32,10 @@ def ask():
         if level == 'cyber':
             status = check_key(user_key)
             if status == "INVALID":
-                return jsonify({'response': '❌ عذراً! هذا المفتاح غير موجود في نظامنا. اشترِ مفتاحك من @Tay22_bot'})
-            if status == "USED":
-                return jsonify({'response': '⚠️ هذا المفتاح تم استخدامه مسبقاً ولا يمكن تفعيله مرة أخرى.'})
+                return jsonify({'response': '❌ مفتاح غير صالح! اشترِ مفتاحك من @Tay22_bot'})
             
             model_name = "llama-3.2-11b-vision-preview"
-            system_msg = "You are a Cyber Security Expert. Analyze images and code step-by-step."
-            mark_key_used(user_key) # قفل المفتاح فوراً بعد الاستخدام الناجح
+            system_msg = "You are a Cyber Security Expert. Analyze everything step-by-step."
         else:
             model_name = "llama-3.3-70b-versatile"
             system_msg = "You are a helpful educational assistant for students."
@@ -63,9 +47,10 @@ def ask():
 
         payload = {"model": model_name, "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": user_content}]}
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
-        return jsonify({'response': r.json()['choices'][0]['message']['content']})
+        
+        return jsonify({'response': r.json()['choices'][0]['message']['content'], 'status': 'SUCCESS'})
     except Exception as e:
-        return jsonify({'response': f'⚠️ خطأ: {str(e)}'})
+        return jsonify({'response': f'⚠️ خطأ في النظام: {str(e)}'})
 
 if __name__ == '__main__':
     app.run(debug=True)
