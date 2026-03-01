@@ -3,7 +3,6 @@ import requests
 import os
 
 app = Flask(__name__)
-# التأكد من جلب المفتاح
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 @app.route('/')
@@ -12,36 +11,28 @@ def index():
 
 @app.route('/ask', methods=['POST'])
 def ask():
-    if not GROQ_API_KEY:
-        return jsonify({'response': '❌ خطأ: لم يتم العثور على GROQ_API_KEY في إعدادات Vercel.'})
-    
     try:
         data = request.get_json()
         q = data.get('q', '')
         key = data.get('key', '')
         mode = data.get('level', 'student')
         
-        # تفعيل الخبير بوجود 771
-        is_cyber = (mode == 'cyber' and "771" in str(key))
-        model = "llama-3.3-70b-versatile" 
-        
+        if mode == 'cyber' and "771" not in str(key):
+            return jsonify({'response': '❌ الوصول مرفوض: كود التفعيل 771 مطلوب.'})
+
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": q}]
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "system", "content": "You are a Cyber Security Expert." if mode == 'cyber' else "You are a helpful assistant."},
+                {"role": "user", "content": q}
+            ]
         }
 
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=20)
-        
-        # فحص استجابة Groq الحقيقية
-        if r.status_code != 200:
-            return jsonify({'response': f'⚠️ خطأ من Groq (كود {r.status_code}): {r.text}'})
-            
-        res = r.json()
-        return jsonify({'response': res['choices'][0]['message']['content']})
-        
+        return jsonify({'response': r.json()['choices'][0]['message']['content']})
     except Exception as e:
-        return jsonify({'response': f'⚠️ خطأ داخلي في السيرفر: {str(e)}'})
+        return jsonify({'response': f'⚠️ خطأ في السيرفر: {str(e)}'})
 
 if __name__ == '__main__':
     app.run()
