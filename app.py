@@ -1,10 +1,10 @@
 from flask import Flask, send_file, request, jsonify
 import requests
 import os
+import base64
 
 app = Flask(__name__)
 
-# المحركات الأساسية
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 USED_KEYS_FILE = "used_keys.txt"
 
@@ -24,33 +24,46 @@ def index():
 @app.route('/ask', methods=['POST'])
 def ask():
     try:
+        # استقبال البيانات (نصوص أو صور)
         data = request.json
         user_key = data.get('key')
         query = data.get('q')
         level = data.get('level')
+        image_data = data.get('image') # الصورة بصيغة Base64
 
-        # الفلترة: لو اختار هكر لازم مفتاح، لو طالب يدخل مجاني
         if level == 'cyber':
             if not user_key or not user_key.startswith("TAY-"):
-                return jsonify({'response': '⚠️ وضع الخبير يتطلب مفتاح تفعيل من @Tay22_bot'})
+                return jsonify({'response': '⚠️ وضع الخبير يتطلب مفتاح تفعيل.'})
             if is_key_used(user_key):
-                return jsonify({'response': '❌ هذا المفتاح تم استخدامه مسبقاً!'})
+                return jsonify({'response': '❌ هذا المفتاح مستخدم مسبقاً.'})
             
-            system_msg = "You are a Cybersecurity Expert. Professional, step-by-step code writer. High intelligence."
-            mark_key_used(user_key) # قفل المفتاح بعد أول استخدام ناجح
+            # نظام التحليل العميق للأمن السيبراني
+            system_msg = "You are a Cyber Security Expert. Analyze files/images provided and write professional code. Step-by-step."
+            model_name = "llama-3.2-11b-vision-preview" # نموذج يدعم الرؤية
+            mark_key_used(user_key)
         else:
-            system_msg = "You are a helpful educational assistant for students. All subjects. Safe for school."
+            system_msg = "You are a helpful student assistant. Educational only."
+            model_name = "llama3-8b-8192"
 
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        
+        # بناء الرسالة (دعم النص + الصورة)
+        content = [{"type": "text", "text": query}]
+        if image_data and level == 'cyber':
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}})
+
         payload = {
-            "model": "llama3-8b-8192",
-            "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": query}]
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": content}
+            ]
         }
         
         r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
         return jsonify({'response': r.json()['choices'][0]['message']['content']})
-    except:
-        return jsonify({'response': '❌ خطأ فني.. حاول لاحقاً.'})
+    except Exception as e:
+        return jsonify({'response': f'❌ خطأ في التحليل: {str(e)}'})
 
 if __name__ == '__main__':
     app.run(debug=True)
