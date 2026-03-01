@@ -1,16 +1,14 @@
 from flask import Flask, send_file, request, jsonify
 import requests
 import os
-import base64
 
 app = Flask(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-def verify_key(key):
-    if not key: return False
-    k = str(key).strip().upper()
-    # أي كود يبدأ بـ TAY ويحتوي على 771 سيعمل فوراً
-    return k.startswith("TAY") and "771" in k
+def is_valid(k):
+    # خوارزمية تاي: أي كود يحتوي على TAY و 771 (مثال: TAY771)
+    k = str(k).upper().strip()
+    return "TAY" in k and "771" in k
 
 @app.route('/')
 def index():
@@ -20,49 +18,28 @@ def index():
 def ask():
     try:
         data = request.json
-        user_key = data.get('key', '')
-        query = data.get('q', '')
-        level = data.get('level', 'student')
-        image_b64 = data.get('image', None)
-        file_text = data.get('file_content', '')
+        key, q, level = data.get('key', ''), data.get('q', ''), data.get('level', 'student')
+        img, txt = data.get('image'), data.get('file_content', '')
 
-        # التحقق من وضع الخبير
         if level == 'cyber':
-            if not verify_key(user_key):
-                return jsonify({'response': '❌ عذراً، كود الوصول غير صحيح. للتفعيل تواصل مع @torto77'})
-            
-            # إعدادات الخبير السيبراني
-            model = "llama-3.2-11b-vision-preview"
-            system_prompt = "You are an elite Cyber Security Expert. Analyze the provided image or code for vulnerabilities, malware, and logic flaws. Be technical and precise."
+            if not is_valid(key):
+                return jsonify({'response': '⚠️ كود الوصول غير صحيح.'})
+            model, sys_msg = "llama-3.2-11b-vision-preview", "You are an Elite Cyber Security Expert. Analyze deeply."
         else:
-            model = "llama-3.3-70b-versatile"
-            system_prompt = "You are a helpful student assistant."
+            model, sys_msg = "llama-3.3-70b-versatile", "You are a helpful assistant."
 
-        # دمج محتوى الملف النصي مع السؤال
-        final_query = f"CONTEXT FILE:\n{file_text}\n\nUSER QUESTION: {query}" if file_text else query
+        prompt = f"FILE_DATA: {txt}\n\nUSER_QUERY: {q}" if txt else q
+        content = [{"type": "text", "text": prompt}]
+        if img and level == 'cyber':
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img}"}})
 
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        
-        content = [{"type": "text", "text": final_query}]
-        if image_b64 and level == 'cyber':
-            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}})
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+        payload = {"model": model, "messages": [{"role": "system", "content": sys_msg}, {"role": "user", "content": content}], "temperature": 0.2}
 
-        payload = {
-            "model": model,
-            "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": content}],
-            "temperature": 0.1 # دقة عالية جداً
-        }
-
-        r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=40)
-        res = r.json()
-
-        if 'choices' in res:
-            return jsonify({'response': res['choices'][0]['message']['content'], 'status': 'SUCCESS'})
-        
-        return jsonify({'response': '⚠️ السيرفر لم يستجب بشكل صحيح، جرب إرسال نص أصغر.'})
-
-    except Exception as e:
-        return jsonify({'response': f'⚠️ خطأ في الاتصال: {str(e)}'})
+        r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=60)
+        return jsonify({'response': r.json()['choices'][0]['message']['content'], 'status': 'SUCCESS'})
+    except:
+        return jsonify({'response': '⚠️ حدث خطأ في معالجة الملفات الكبيرة. حاول تقليل حجم الملف.'})
 
 if __name__ == '__main__':
     app.run(debug=True)

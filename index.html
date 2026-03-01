@@ -3,93 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAY CYBER X</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700&display=swap" rel="stylesheet">
+    <title>TAY CORE</title>
     <style>
-        :root { --cyber: #00ff41; --bg: #050505; }
-        body { margin:0; font-family:'Cairo'; background:#0f172a; color:white; transition: 0.3s; }
-        body.cyber-mode { background: var(--bg); }
-        .container { display:flex; flex-direction:column; height:100vh; padding:10px; box-sizing:border-box; }
-        #chat { flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; gap:12px; }
-        .msg { padding:15px; border-radius:12px; max-width:85%; line-height:1.6; border: 1px solid rgba(255,255,255,0.1); }
-        .bot { background: linear-gradient(45deg, #00d2ff, transparent); align-self: flex-end; border-right: 4px solid #00d2ff; }
-        .cyber-msg { background: linear-gradient(45deg, var(--cyber), transparent) !important; border-right: 4px solid var(--cyber) !important; color: #fff; }
-        .input-area { background:rgba(0,0,0,0.8); padding:15px; border-radius:20px; border:1px solid #444; }
-        input, select, button { width:100%; padding:12px; margin-top:8px; border-radius:8px; border:none; background:#1e293b; color:white; font-family:'Cairo'; }
+        body { margin:0; background:#0f172a; color:white; font-family:sans-serif; transition: 0.5s; }
+        body.cyber { background:#050505; color:#00ff41; }
+        #chat { height:70vh; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:10px; }
+        .msg { padding:10px; border-radius:10px; max-width:80%; border:1px solid #333; }
+        .bot { align-self:flex-end; background:rgba(0,210,255,0.1); border-right:4px solid #00d2ff; }
+        .cyber .bot { background:rgba(0,255,65,0.1); border-right:4px solid #00ff41; }
+        .input-box { padding:20px; background:rgba(0,0,0,0.5); border-top:1px solid #333; }
+        input, select, button { width:100%; padding:10px; margin-bottom:5px; border-radius:5px; border:none; background:#1e293b; color:white; }
         button { background:#00d2ff; color:black; font-weight:bold; cursor:pointer; }
-        .cyber-btn { background: var(--cyber) !important; }
+        .cyber button { background:#00ff41; }
     </style>
 </head>
 <body>
-<div class="container">
-    <h2 id="title" style="text-align:center;">🎓 TAY STUDENT</h2>
     <div id="chat"></div>
-    <div class="input-area">
-        <select id="mode" onchange="toggleMode(this.value)">
+    <div class="input-box">
+        <select id="mode" onchange="document.body.className=(this.value==='cyber'?'cyber':''); document.getElementById('extra').style.display=(this.value==='cyber'?'block':'none')">
             <option value="student">🎓 وضع الطالب</option>
-            <option value="cyber">🛡️ وضع الخبير السيبراني</option>
+            <option value="cyber">🛡️ وضع الخبير</option>
         </select>
-        <div id="cyber-extras" style="display:none;">
-            <input type="password" id="key" placeholder="أدخل كود التفعيل">
-            <input type="file" id="pic" accept="image/*">
-            <input type="file" id="doc" accept=".txt,.py,.js,.php,.html">
+        <div id="extra" style="display:none;">
+            <input type="password" id="key" placeholder="كود الوصول">
+            <input type="file" id="p" accept="image/*">
+            <input type="file" id="d" accept=".py,.js,.txt,.html">
         </div>
-        <input type="text" id="q" placeholder="اسأل تاي...">
-        <button id="btn" onclick="process()">إرسال الطلب</button>
+        <input type="text" id="q" placeholder="اكتب سؤالك...">
+        <button onclick="send()">إرسال</button>
     </div>
-</div>
 <script>
-    function toggleMode(v) {
-        const isC = v === 'cyber';
-        document.body.className = isC ? 'cyber-mode' : '';
-        document.getElementById('cyber-extras').style.display = isC ? 'block' : 'none';
-        document.getElementById('title').innerText = isC ? '🛡️ TAY CYBER EXPERT' : '🎓 TAY STUDENT';
-        document.getElementById('btn').className = isC ? 'cyber-btn' : '';
-    }
-
-    async function process() {
-        const q = document.getElementById('q').value;
-        const mode = document.getElementById('mode').value;
-        const key = document.getElementById('key').value;
-        const pic = document.getElementById('pic').files[0];
-        const doc = document.getElementById('doc').files[0];
-
+    async function send(){
+        const q=document.getElementById('q').value, m=document.getElementById('mode').value, k=document.getElementById('key').value;
+        const p=document.getElementById('p').files[0], d=document.getElementById('d').files[0];
         if(!q) return;
-        addMsg(q, 'user');
-        document.getElementById('q').value = '';
-
-        let imgB64 = null, docText = null;
-        if(mode === 'cyber') {
-            if(pic) {
-                const r = new FileReader(); r.readAsDataURL(pic);
-                await new Promise(res => r.onload = res);
-                imgB64 = r.result.split(',')[1];
-            }
-            if(doc) {
-                const r = new FileReader(); r.readAsText(doc);
-                await new Promise(res => r.onload = res);
-                docText = r.result;
-            }
+        addMsg(q,'user'); document.getElementById('q').value='';
+        let img=null, txt=null;
+        if(m==='cyber'){
+            if(p){ const r=new FileReader(); r.readAsDataURL(p); await new Promise(x=>r.onload=x); img=r.result.split(',')[1]; }
+            if(d){ const r=new FileReader(); r.readAsText(d); await new Promise(x=>r.onload=x); txt=r.result; }
         }
-
         try {
-            const response = await fetch('/ask', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({q: q, key: key, level: mode, image: imgB64, file_content: docText})
-            });
-            const data = await response.json();
-            addMsg(data.response, mode === 'cyber' ? 'bot cyber-msg' : 'bot');
-        } catch (e) {
-            addMsg("⚠️ فشل في الاتصال. للتفعيل تواصل مع @torto77", "bot");
-        }
+            const res = await fetch('/ask', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({q:q, key:k, level:m, image:img, file_content:txt})});
+            const data = await res.json();
+            addMsg(data.response, 'bot');
+        } catch(e) { addMsg("⚠️ فشل في الاتصال بالسيرفر. جرب ملفاً أصغر.", 'bot'); }
     }
-
-    function addMsg(t, s) {
-        const d = document.createElement('div'); d.className = 'msg ' + s;
-        d.innerText = t;
-        document.getElementById('chat').appendChild(d);
-        document.getElementById('chat').scrollTop = 99999;
+    function addMsg(t,s){
+        const div=document.createElement('div'); div.className='msg '+s; div.innerText=t;
+        document.getElementById('chat').appendChild(div);
+        document.getElementById('chat').scrollTop=99999;
     }
 </script>
 </body>
