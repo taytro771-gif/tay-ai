@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAY SYSTEM v6.0</title>
+    <title>TAY SYSTEM v8.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap" rel="stylesheet">
     <style>
         :root { --main: #00d2ff; --bg: #0f172a; }
@@ -11,12 +11,13 @@
         body.cyber { --main: #00ff41; background: #050505; }
         .container { display:flex; flex-direction:column; height:100vh; padding:15px; box-sizing:border-box; }
         #chat { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:10px; }
-        .msg { padding:12px; border-radius:15px; max-width:85%; font-size:0.9rem; }
-        .user { background: rgba(255,255,255,0.1); align-self: flex-start; }
-        .bot { background: linear-gradient(45deg, var(--main), transparent); align-self: flex-end; border-right:4px solid var(--main); }
+        .msg { padding:12px; border-radius:15px; max-width:85%; font-size:0.9rem; line-height:1.6; }
+        .user { background: rgba(255,255,255,0.1); align-self: flex-start; border-left: 3px solid #ccc; }
+        .bot { background: linear-gradient(45deg, var(--main), transparent); align-self: flex-end; border-right:4px solid var(--main); white-space: pre-wrap; }
         .input-box { background:rgba(0,0,0,0.9); padding:15px; border-radius:20px; border:1px solid var(--main); display:flex; flex-direction:column; gap:10px; }
         input, select, button { padding:12px; border-radius:10px; border:none; outline:none; font-family:'Cairo'; background:#1e293b; color:white; }
-        button { background:var(--main); color:black; font-weight:900; cursor:pointer; }
+        button { background:var(--main); color:black; font-weight:900; cursor:pointer; transition: 0.3s; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
         #cyber-tools { display: none; flex-direction: column; gap: 10px; }
     </style>
 </head>
@@ -30,45 +31,82 @@
             <option value="c">🛡️ وضع الأمن السيبراني (خبير + تحليل)</option>
         </select>
         <div id="cyber-tools">
-            <input type="password" id="key" placeholder="أدخل مفتاح TAY- الخاص بك">
+            <input type="password" id="key" placeholder="أدخل مفتاح TAY- للتفعيل">
             <input type="file" id="pic" accept="image/*">
         </div>
         <div style="display:flex; gap:5px;">
             <input type="text" id="q" placeholder="اسأل تاي..." style="flex:1;">
-            <button onclick="send()">إرسال</button>
+            <button id="sendBtn" onclick="send()">إرسال</button>
         </div>
     </div>
 </div>
 <script>
+    window.onload = () => {
+        const saved = localStorage.getItem("tay_key");
+        if(saved) {
+            document.getElementById('key').value = saved;
+            document.getElementById('key').placeholder = "✅ مفتاحك مفعل تلقائياً";
+        }
+    };
+
     function upd(v){
         const isC = (v==='c');
         document.body.className = isC ? 'cyber' : '';
         document.getElementById('st').innerText = isC ? '🛡️ TAY CYBER EXPERT' : '🎓 TAY STUDENT';
         document.getElementById('cyber-tools').style.display = isC ? 'flex' : 'none';
     }
+
     async function send(){
         const query = document.getElementById('q').value;
         const mode = document.getElementById('mode').value;
-        const key = document.getElementById('key').value;
+        const key = document.getElementById('key').value || localStorage.getItem("tay_key");
         const file = document.getElementById('pic').files[0];
-        if(!query) return;
+        const btn = document.getElementById('sendBtn');
         
+        if(!query) return;
+        if(mode === 'c' && !key) return alert("يرجى إدخال مفتاح التفعيل أولاً!");
+
+        btn.disabled = true;
+        addMsg(query, 'user');
+        document.getElementById('q').value = '';
+
         let img = null;
         if(mode==='c' && file){
-            const r = new FileReader(); r.readAsDataURL(file);
-            await new Promise(res => r.onload = res);
-            img = r.result.split(',')[1];
+            // تحويل الصورة وضغطها لضمان عدم حدوث خطأ Choices
+            img = await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const canvas = document.createElement('canvas');
+                    const image = new Image();
+                    image.onload = () => {
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = 800; canvas.height = (image.height / image.width) * 800;
+                        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+                    };
+                    image.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
         }
 
-        addMsg(query, 'user');
-        const res = await fetch('/ask', {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({q:query, key:key, level: (mode==='c'?'cyber':'student'), image:img})
-        });
-        const d = await res.json();
-        addMsg(d.response, 'bot');
+        try {
+            const res = await fetch('/ask', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({q:query, key:key, level: (mode==='c'?'cyber':'student'), image:img})
+            });
+            const d = await res.json();
+            
+            if(d.status === "SUCCESS" && mode === 'c') localStorage.setItem("tay_key", key);
+            addMsg(d.response, 'bot');
+        } catch (e) {
+            addMsg("❌ حدث خطأ في الاتصال بالذكاء الاصطناعي، جرب مرة أخرى.", "bot");
+        } finally {
+            btn.disabled = false;
+        }
     }
+
     function addMsg(t,s){
         const dv=document.createElement('div'); dv.className='msg '+s; dv.innerText=t;
         document.getElementById('chat').appendChild(dv);
