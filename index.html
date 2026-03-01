@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TAY SYSTEM v10.0</title>
+    <title>TAY SYSTEM v13.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap" rel="stylesheet">
     <style>
         :root { --main: #00d2ff; --bg: #0f172a; }
@@ -18,6 +18,7 @@
         input, select, button { padding:10px; border-radius:8px; border:none; font-family:'Cairo'; background:#1e293b; color:white; }
         button { background:var(--main); color:black; font-weight:900; cursor:pointer; }
         #cyber-tools { display: none; flex-direction: column; gap: 5px; }
+        a { color: #fff; text-decoration: underline; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -30,19 +31,26 @@
             <option value="c">🛡️ وضع الأمن السيبراني</option>
         </select>
         <div id="cyber-tools">
-            <input type="password" id="key" placeholder="مفتاح TAY-xxxx-771">
+            <input type="password" id="key" placeholder="أدخل كود الوصول الآمن...">
             <input type="file" id="pic" accept="image/*">
         </div>
         <div style="display:flex; gap:5px;">
-            <input type="text" id="q" placeholder="اكتب هنا..." style="flex:1;">
+            <input type="text" id="q" placeholder="اكتب سؤالك هنا..." style="flex:1;">
             <button id="sendBtn" onclick="send()">إرسال</button>
         </div>
     </div>
 </div>
 <script>
-    // استعادة المفتاح تلقائياً
-    const saved = localStorage.getItem("tay_key");
-    if(saved) document.getElementById('key').value = saved;
+    function saveKey(k) { try { localStorage.setItem("tay_key", k); } catch(e) {} }
+    function getKey() { try { return localStorage.getItem("tay_key"); } catch(e) { return null; } }
+
+    window.onload = () => {
+        const saved = getKey();
+        if(saved) {
+            document.getElementById('key').value = saved;
+            document.getElementById('key').placeholder = "✅ النظام نشط";
+        }
+    };
 
     function upd(v){
         const isC = (v==='c');
@@ -54,11 +62,15 @@
     async function send(){
         const q = document.getElementById('q').value;
         const mode = document.getElementById('mode').value;
-        const key = document.getElementById('key').value;
+        const keyInput = document.getElementById('key').value;
+        const key = keyInput || getKey();
         const file = document.getElementById('pic').files[0];
         
         if(!q) return;
-        if(mode === 'c' && !key) return alert("المفتاح مطلوب!");
+        if(mode === 'c' && !key) {
+            addMsg("⚠️ للتفعيل والحصول على الكود، تواصل مع المالك عبر التليجرام: @torto77", "bot");
+            return;
+        }
 
         addMsg(q, 'user');
         document.getElementById('q').value = '';
@@ -77,20 +89,29 @@
                 headers:{'Content-Type':'application/json'},
                 body: JSON.stringify({q:q, key:key, level:(mode==='c'?'cyber':'student'), image:imgBase64})
             });
-            
-            if (!res.ok) throw new Error("Server Error: " + res.status);
-            
             const d = await res.json();
-            if(d.status === "SUCCESS" && mode === 'c') localStorage.setItem("tay_key", key);
-            addMsg(d.response, 'bot');
+            
+            if(d.status === "SUCCESS" && mode === 'c') {
+                saveKey(key);
+                document.getElementById('key').placeholder = "✅ النظام نشط";
+            }
+            
+            // إذا رد السيرفر بأن المفتاح خاطئ
+            if(d.response.includes("مفتاح غير صالح")) {
+                addMsg("❌ الكود غير صحيح. للتواصل إتصل ب @torto77 في التليجرام.", "bot");
+            } else {
+                addMsg(d.response, 'bot');
+            }
+            
         } catch (e) {
-            // إظهار الخطأ الحقيقي للتحليل
-            addMsg("⚠️ فشل الإرسال. السبب: " + e.message, "bot");
+            addMsg("⚠️ فشل الإرسال. للتواصل إتصل ب @torto77 في التليجرام.", "bot");
         }
     }
 
     function addMsg(t,s){
-        const dv=document.createElement('div'); dv.className='msg '+s; dv.innerText=t;
+        const dv=document.createElement('div'); dv.className='msg '+s; 
+        // تحويل المعرف لرابط قابل للنقر
+        dv.innerHTML = t.replace('@torto77', '<a href="https://t.me/torto77" target="_blank">@torto77</a>');
         document.getElementById('chat').appendChild(dv);
         document.getElementById('chat').scrollTop = 99999;
     }
