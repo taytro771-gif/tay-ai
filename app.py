@@ -12,45 +12,34 @@ def index():
 @app.route('/ask', methods=['POST'])
 def ask():
     try:
-        data = request.json
-        user_key = data.get('key', '')
-        query = data.get('q', '')
-        level = data.get('level', 'student')
-        image_data = data.get('image', None)
-        file_text = data.get('file_content', '')
+        # استقبال البيانات سواء كانت JSON أو Form
+        q = request.form.get('q') or request.json.get('q')
+        key = request.form.get('key') or request.json.get('key', '')
+        level = request.form.get('level') or request.json.get('level', 'student')
+        image_data = request.form.get('image') or request.json.get('image')
+        file_text = request.form.get('file_content') or request.json.get('file_content', '')
 
-        # نظام تفعيل ذكي وغير معقد (ابحث عن 771 فقط)
-        if level == 'cyber' and "771" not in str(user_key):
-            return jsonify({'response': '❌ كود الوصول غير صالح.'})
+        if level == 'cyber' and "771" not in str(key):
+            return jsonify({'response': '❌ الكود غير صحيح.'})
 
-        # اختيار الموديل (الخبير للصور والملفات، والطالب للنصوص)
-        model_name = "llama-3.2-11b-vision-preview" if (image_data or level == 'cyber') else "llama-3.3-70b-versatile"
+        model = "llama-3.2-11b-vision-preview" if (image_data or level == 'cyber') else "llama-3.3-70b-versatile"
         
-        system_msg = "You are a Cyber Security Expert. Analyze images and code deeply." if level == 'cyber' else "You are a helpful student assistant."
-
-        # بناء الطلب
-        full_query = f"FILE DATA:\n{file_text}\n\nQUESTION: {query}" if file_text else query
-        content = [{"type": "text", "text": full_query}]
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+        full_q = f"FILE:\n{file_text}\n\nQ: {q}" if file_text else q
+        content = [{"type": "text", "text": full_q}]
         
         if image_data and level == 'cyber':
             content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}})
 
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
         payload = {
-            "model": model_name,
-            "messages": [{"role": "system", "content": system_msg}, {"role": "user", "content": content}],
-            "temperature": 0.2
+            "model": model,
+            "messages": [{"role": "system", "content": "Cyber Expert Mode."}, {"role": "user", "content": content}]
         }
 
-        r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=40)
-        res = r.json()
-
-        if 'choices' in res:
-            return jsonify({'response': res['choices'][0]['message']['content'], 'status': 'SUCCESS'})
-        return jsonify({'response': '⚠️ السيرفر لم يعطِ ردّاً، حاول مجدداً.'})
-
+        r = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload, timeout=30)
+        return jsonify({'response': r.json()['choices'][0]['message']['content']})
     except Exception as e:
-        return jsonify({'response': f'⚠️ عطل: {str(e)}'})
+        return jsonify({'response': f'⚠️ خطأ سيرفر: {str(e)}'})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
